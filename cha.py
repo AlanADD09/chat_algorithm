@@ -4,6 +4,24 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 
+# Paso 3 Ajustado: Traslación Inicial de Ejes
+def initial_translation(X_train):
+    """
+    Aplica la traslación inicial de ejes a los datos de entrenamiento.
+    
+    Parámetros:
+    - X_train: Conjunto de datos de entrenamiento.
+    
+    Retorna:
+    - X_train_translated: Datos trasladados.
+    - mean_vector: Vector de media utilizado para la traslación.
+    """
+    mean_vector = np.mean(X_train, axis=0)
+    X_train_translated = X_train - mean_vector
+    print("Vector de media para traslación inicial:\n", mean_vector)
+    print("Datos trasladados para el aprendizaje:\n", X_train_translated)
+    return X_train_translated, mean_vector
+
 # Paso 1: Inicialización de la Memoria
 def initialize_memory(dim_input, dim_output):
     memory_matrix = np.zeros((dim_output, dim_input))
@@ -83,14 +101,17 @@ def run_chat_algorithm(file_path, learning_rate=0.1, max_iterations=100):
     dim_input = X_train.shape[1]
     dim_output = len(np.unique(y_train))
 
+    # Traslación Inicial de los Datos
+    X_train_translated, mean_vector = initial_translation(X_train.values)
+
     # Inicialización de la memoria
     memory_matrix = initialize_memory(dim_input, dim_output)
 
-    # Aprendizaje del Linear Associator
-    linear_associator_learning(memory_matrix, X_train.values, y_train.values)
+    # Aprendizaje del Linear Associator con Datos Trasladados
+    linear_associator_learning(memory_matrix, X_train_translated, y_train.values)
     print("Matriz de memoria después del aprendizaje:\n", memory_matrix)
 
-    # Traslación de Ejes
+    # Traslación Final para Clasificación
     memory_matrix_translated, X_test_translated = translate_axes(memory_matrix, X_train.values, X_test.values)
     print("Matriz de memoria después de la traslación:\n", memory_matrix_translated)
 
@@ -141,6 +162,52 @@ def test_chat():
     predicciones_example = classify_unknown_patterns(memory_matrix_translated_example, X_test_translated_example)
     print("Clasificaciones para los patrones desconocidos:", predicciones_example)
 
+def run_chat_algorithm_binary_classification(file_path):
+    # Cargar y preprocesar datos
+    data = pd.read_csv(file_path, header=None)
+    data.replace("?", pd.NA, inplace=True)
+    data = data.apply(pd.to_numeric, errors='coerce')
+    data.fillna(data.median(), inplace=True)
+
+    # Consolidar clases (0 = sano, 1-4 = enfermo)
+    data[13] = data[13].apply(lambda x: 0 if x == 0 else 1)
+
+    # Normalización de datos (solo las primeras 13 columnas)
+    scaler = MinMaxScaler()
+    data.iloc[:, :-1] = scaler.fit_transform(data.iloc[:, :-1])
+    print("Datos después de la normalización y consolidación de clases:\n", data.head())
+
+    # División de datos en entrenamiento y prueba (13 características, 1 clase)
+    X = data.iloc[:, :-1]
+    y = data[13]
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Dimensiones de entrada y salida
+    dim_input = X_train.shape[1]  # Ahora es 13
+    dim_output = len(np.unique(y_train))  # Ahora es 2 (sano, enfermo)
+
+    # Traslación Inicial de los Datos
+    X_train_translated, mean_vector = initial_translation(X_train.values)
+
+    # Inicialización de la memoria
+    memory_matrix = initialize_memory(dim_input, dim_output)
+
+    # Aprendizaje del Linear Associator con Datos Trasladados
+    linear_associator_learning(memory_matrix, X_train_translated, y_train.values)
+    print("Matriz de memoria después del aprendizaje:\n", memory_matrix)
+
+    # Traslación Final para Clasificación
+    memory_matrix_translated, X_test_translated = translate_axes(memory_matrix, X_train.values, X_test.values)
+    print("Matriz de memoria después de la traslación:\n", memory_matrix_translated)
+
+    # Clasificación de Patrones Desconocidos
+    predicciones = classify_unknown_patterns(memory_matrix_translated, X_test_translated)
+    print("Clasificaciones para los primeros patrones desconocidos:", predicciones[:10])
+
+    # Evaluación del Modelo
+    evaluate_model(y_test.values, np.array(predicciones))
+
 # Ejecutar el algoritmo
 # run_chat_algorithm('processed.cleveland.data')
-test_chat()
+run_chat_algorithm_binary_classification('processed.cleveland.data')
+# test_chat()
